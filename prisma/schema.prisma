@@ -1,0 +1,130 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Project {
+  id          String   @id @default(uuid())
+  title       String
+  sourceType  String   // "youtube" | "upload" | "podcast"
+  sourceUrl   String?
+  fileName    String?
+  filePath    String?
+  duration    Float?   // seconds
+  thumbnail   String?
+  status      String   @default("pending") // pending | downloading | transcribing | analyzing | ready | error
+  error       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  transcript  Transcript?
+  analysis    Analysis?
+  clips       Clip[]
+  renderJobs  RenderJob[]
+}
+
+model Transcript {
+  id        String   @id @default(uuid())
+  projectId String   @unique
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  fullText  String
+  segments  String   // JSON: Array<{ start: number, end: number, text: string, speaker?: string }>
+  language  String   @default("en")
+  createdAt DateTime @default(now())
+}
+
+model Analysis {
+  id             String   @id @default(uuid())
+  projectId      String   @unique
+  project        Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  mainTopic      String
+  topics         String   // JSON: Array<{ name: string, start: number, end: number }>
+  hooks          String   // JSON: Array<{ timestamp: number, text: string, type: string, score: number }>
+  emotionalPeaks String   // JSON: Array<{ timestamp: number, emotion: string, intensity: number }>
+  keyMoments     String   // JSON: Array<{ start: number, end: number, type: string, description: string, score: number }>
+  speakerChanges String   // JSON: Array<{ timestamp: number, speaker: string }>
+  summary        String
+  createdAt      DateTime @default(now())
+}
+
+model Clip {
+  id              String   @id @default(uuid())
+  projectId       String
+  project         Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  title           String
+  hook            String?
+  description     String
+  hashtags        String   // JSON: string[]
+  startTime       Float
+  endTime         Float
+  duration        Float
+  engagementScore Float    // 0-100
+  topicCategory   String
+  platforms       String   // JSON: string[] — recommended platforms
+  captionStyle    String   @default("bold") // classic | highlight | bold | subtitle | colorful | minimal
+  captionData     String?  // JSON: caption timing and style overrides
+  titleOverlay    String?
+  hookText        String?
+  status          String   @default("suggested") // suggested | approved | rendering | rendered | published
+  outputPath      String?
+  thumbnailPath   String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  renderJobs RenderJob[]
+  publications Publication[]
+}
+
+model RenderJob {
+  id         String   @id @default(uuid())
+  projectId  String
+  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  clipId     String
+  clip       Clip     @relation(fields: [clipId], references: [id], onDelete: Cascade)
+  platform   String   // youtube_shorts | instagram_reels | tiktok | x_video | linkedin
+  format     String   @default("mp4")
+  resolution String   @default("1080x1920") // 9:16 vertical
+  status     String   @default("queued") // queued | processing | completed | failed
+  progress   Float    @default(0)
+  outputPath String?
+  error      String?
+  startedAt  DateTime?
+  completedAt DateTime?
+  createdAt  DateTime @default(now())
+}
+
+model Publication {
+  id          String   @id @default(uuid())
+  clipId      String
+  clip        Clip     @relation(fields: [clipId], references: [id], onDelete: Cascade)
+  platform    String
+  externalId  String?
+  externalUrl String?
+  status      String   @default("draft") // draft | scheduled | published | failed
+  scheduledAt DateTime?
+  publishedAt DateTime?
+  error       String?
+  createdAt   DateTime @default(now())
+}
+
+model Settings {
+  id    String @id @default("global")
+  data  String // JSON blob for all settings
+}
+
+model CaptionPreset {
+  id         String @id @default(uuid())
+  name       String
+  style      String // classic | highlight | bold | subtitle | colorful | minimal
+  fontFamily String @default("Inter")
+  fontSize   Int    @default(48)
+  fontColor  String @default("#FFFFFF")
+  bgColor    String?
+  position   String @default("center") // top | center | bottom
+  animation  String @default("fade") // fade | pop | typewriter | slide | none
+  config     String // JSON: full style config
+}
