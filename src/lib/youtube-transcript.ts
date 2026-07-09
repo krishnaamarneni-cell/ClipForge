@@ -25,12 +25,12 @@ export async function fetchYouTubeTranscript(videoId: string): Promise<Transcrip
     console.log(`[transcript] YouTube captions unavailable: ${err instanceof Error ? err.message : err}`);
   }
 
-  // Try 2: Download audio and transcribe with Groq Whisper
+  // Try 2: Download audio via InnerTube and transcribe with Groq Whisper
   if (!process.env.GROQ_API_KEY) {
     throw new Error('No captions available for this video and no Groq API key set for Whisper transcription.');
   }
 
-  console.log('[transcript] Downloading audio for Whisper transcription...');
+  console.log('[transcript] Downloading audio via InnerTube for Whisper transcription...');
   const audioBuffer = await downloadYouTubeAudio(videoId);
 
   if (audioBuffer.byteLength > 25 * 1024 * 1024) {
@@ -42,49 +42,53 @@ export async function fetchYouTubeTranscript(videoId: string): Promise<Transcrip
 }
 
 async function downloadYouTubeAudio(videoId: string): Promise<Buffer> {
-  const ytdl = (await import('@distube/ytdl-core')).default;
-  const url = `https://www.youtube.com/watch?v=${videoId}`;
+  const { Innertube } = await import('youtubei.js');
+  const yt = await Innertube.create({ retrieve_player: true, generate_session_locally: true });
 
-  if (!ytdl.validateURL(url)) {
-    throw new Error('Invalid YouTube URL');
+  const info = await yt.getBasicInfo(videoId);
+
+  const format = info.chooseFormat({ type: 'audio', quality: 'best' });
+  if (!format) {
+    throw new Error('No audio format available for this video');
   }
 
-  return new Promise<Buffer>((resolve, reject) => {
-    const chunks: Buffer[] = [];
-    let totalSize = 0;
-    const maxSize = 25 * 1024 * 1024;
-
-    const stream = ytdl(url, {
-      filter: 'audioonly',
-      quality: 'lowestaudio',
-    });
-
-    const timeout = setTimeout(() => {
-      stream.destroy();
-      reject(new Error('Audio download timed out (30s). Try a shorter video.'));
-    }, 30000);
-
-    stream.on('data', (chunk: Buffer) => {
-      totalSize += chunk.length;
-      if (totalSize > maxSize) {
-        stream.destroy();
-        clearTimeout(timeout);
-        reject(new Error('Audio file too large (>25MB). Try a shorter video or upload audio directly.'));
-        return;
-      }
-      chunks.push(chunk);
-    });
-
-    stream.on('end', () => {
-      clearTimeout(timeout);
-      resolve(Buffer.concat(chunks));
-    });
-
-    stream.on('error', (err: Error) => {
-      clearTimeout(timeout);
-      reject(new Error(`Failed to download audio: ${err.message}`));
-    });
+  const stream = await yt.download(videoId, {
+    type: 'audio',
+    quality: 'best',
   });
+
+  const chunks: Uint8Array[] = [];
+  let totalSize = 0;
+  const maxSize = 25 * 1024 * 1024;
+
+  const reader = stream.getReader();
+  const timeout = setTimeout(() => {
+    reader.cancel();
+  }, 35000);
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      totalSize += value.byteLength;
+      if (totalSize > maxSize) {
+        await reader.cancel();
+        throw new Error('Audio file too large (>25MB). Try a shorter video or upload audio directly.');
+      }
+      chunks.push(value);
+    }
+  } finally {
+    clearTimeout(timeout);
+  }
+
+  const combined = new Uint8Array(totalSize);
+  let offset = 0;
+  for (const chunk of chunks) {
+    combined.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+
+  return Buffer.from(combined);
 }
 
 async function transcribeWithWhisper(audioBuffer: Buffer): Promise<TranscriptSegment[]> {
