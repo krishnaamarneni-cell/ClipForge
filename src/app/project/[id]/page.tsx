@@ -108,6 +108,9 @@ export default function ProjectPage() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<Tab>('clips');
   const [selectedClips, setSelectedClips] = useState<Set<string>>(new Set());
+  const [renderingClips, setRenderingClips] = useState<Set<string>>(new Set());
+  const [exportClip, setExportClip] = useState<ClipDetail | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
@@ -154,6 +157,68 @@ export default function ProjectPage() {
       else next.add(clipId);
       return next;
     });
+  }
+
+  async function handleRender(clip: ClipDetail) {
+    setRenderingClips((prev) => new Set(prev).add(clip.id));
+    try {
+      const res = await fetch(`/api/clips/${clip.id}/render`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ platform: 'youtube_shorts', resolution: '1080x1920' }),
+      });
+      if (!res.ok) throw new Error('Render failed');
+      setExportClip(clip);
+    } catch {
+      showToast('Failed to queue render');
+    } finally {
+      setRenderingClips((prev) => {
+        const next = new Set(prev);
+        next.delete(clip.id);
+        return next;
+      });
+    }
+  }
+
+  async function handleRenderBatch() {
+    const clipIds = selectedClips.size > 0
+      ? project!.clips.filter((c) => selectedClips.has(c.id))
+      : project!.clips;
+    for (const clip of clipIds) {
+      await handleRender(clip);
+    }
+    if (clipIds.length > 1) {
+      showToast(`${clipIds.length} clips queued`);
+    }
+  }
+
+  function showToast(message: string) {
+    setToast(message);
+    setTimeout(() => setToast(null), 3000);
+  }
+
+  function getYouTubeClipUrl(clip: ClipDetail): string | null {
+    if (project?.sourceType !== 'youtube' || !project.sourceUrl) return null;
+    const match = project.sourceUrl.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/shorts\/)([a-zA-Z0-9_-]{11})/);
+    if (!match) return null;
+    const startSec = Math.floor(clip.startTime);
+    return `https://youtube.com/watch?v=${match[1]}&t=${startSec}`;
+  }
+
+  function copyClipContent(clip: ClipDetail) {
+    const lines = [
+      clip.title,
+      '',
+      clip.description,
+      '',
+      (clip.platforms || []).map((p) => platformLabel(p)).join(' | '),
+      '',
+      `Timestamps: ${formatDuration(clip.startTime)} - ${formatDuration(clip.endTime)} (${formatDuration(clip.duration)})`,
+    ];
+    const url = getYouTubeClipUrl(clip);
+    if (url) lines.push(`Source: ${url}`);
+    navigator.clipboard.writeText(lines.join('\n'));
+    showToast('Clip details copied!');
   }
 
   if (loading) {
@@ -366,13 +431,24 @@ export default function ProjectPage() {
 
                     {/* Actions */}
                     <div className="flex gap-2">
-                      <button className="btn-secondary flex-1 flex items-center justify-center gap-1.5 text-sm py-2">
+                      <button
+                        onClick={() => router.push(`/project/${id}/editor/${clip.id}`)}
+                        className="btn-secondary flex-1 flex items-center justify-center gap-1.5 text-sm py-2"
+                      >
                         <Pencil className="w-3.5 h-3.5" />
                         Edit
                       </button>
-                      <button className="btn-primary flex-1 flex items-center justify-center gap-1.5 text-sm py-2">
-                        <Film className="w-3.5 h-3.5" />
-                        Render
+                      <button
+                        onClick={() => handleRender(clip)}
+                        disabled={renderingClips.has(clip.id)}
+                        className="btn-primary flex-1 flex items-center justify-center gap-1.5 text-sm py-2 disabled:opacity-50"
+                      >
+                        {renderingClips.has(clip.id) ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <Film className="w-3.5 h-3.5" />
+                        )}
+                        {renderingClips.has(clip.id) ? 'Rendering...' : 'Render'}
                       </button>
                     </div>
                   </div>
@@ -530,6 +606,93 @@ export default function ProjectPage() {
         )}
       </div>
 
+      {/* Export Modal */}
+      {exportClip && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm animate-fade-in" onClick={() => setExportClip(null)}>
+          <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl shadow-2xl w-full max-w-lg mx-4 p-6" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-bold text-[var(--text-primary)]">Clip Export</h2>
+              <button onClick={() => setExportClip(null)} className="text-[var(--text-tertiary)] hover:text-[var(--text-primary)] text-xl">&times;</button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <h3 className="font-semibold text-[var(--text-primary)] mb-1">{exportClip.title}</h3>
+                <p className="text-sm text-[var(--text-secondary)]">{exportClip.description}</p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div className="p-3 rounded-xl bg-surface-1 dark:bg-surface-dark-1">
+                  <span className="text-[var(--text-tertiary)]">Timestamps</span>
+                  <p className="font-mono font-medium text-[var(--text-primary)]">
+                    {formatDuration(exportClip.startTime)} → {formatDuration(exportClip.endTime)}
+                  </p>
+                </div>
+                <div className="p-3 rounded-xl bg-surface-1 dark:bg-surface-dark-1">
+                  <span className="text-[var(--text-tertiary)]">Duration</span>
+                  <p className="font-mono font-medium text-[var(--text-primary)]">{formatDuration(exportClip.duration)}</p>
+                </div>
+              </div>
+
+              <div className="p-3 rounded-xl bg-surface-1 dark:bg-surface-dark-1">
+                <span className="text-xs text-[var(--text-tertiary)]">Platforms</span>
+                <div className="flex flex-wrap gap-1 mt-1">
+                  {exportClip.platforms.map((p) => (
+                    <span key={p} className="text-xs px-2 py-0.5 rounded-full bg-brand-100 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400">
+                      {platformLabel(p)}
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              {/* YouTube Preview Link */}
+              {getYouTubeClipUrl(exportClip) && (
+                <a
+                  href={getYouTubeClipUrl(exportClip)!}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 p-3 rounded-xl bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 text-sm hover:bg-red-100 dark:hover:bg-red-900/20 transition-colors"
+                >
+                  <Play className="w-4 h-4" />
+                  Preview clip on YouTube (starts at {formatDuration(exportClip.startTime)})
+                </a>
+              )}
+
+              <div className="flex gap-2">
+                <button
+                  onClick={() => copyClipContent(exportClip)}
+                  className="btn-secondary flex-1 flex items-center justify-center gap-2 text-sm"
+                >
+                  <Download className="w-4 h-4" />
+                  Copy Details
+                </button>
+                <button
+                  onClick={() => {
+                    router.push(`/project/${id}/editor/${exportClip.id}`);
+                    setExportClip(null);
+                  }}
+                  className="btn-primary flex-1 flex items-center justify-center gap-2 text-sm"
+                >
+                  <Pencil className="w-4 h-4" />
+                  Edit Clip
+                </button>
+              </div>
+
+              <p className="text-xs text-[var(--text-tertiary)] text-center">
+                Render job queued. Video cutting requires a background worker — use timestamps above with any video editor to cut the clip.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Toast */}
+      {toast && (
+        <div className="fixed top-6 right-6 z-[70] bg-[var(--bg-card)] border border-[var(--border)] shadow-xl rounded-xl px-4 py-3 text-sm text-[var(--text-primary)] animate-fade-in">
+          {toast}
+        </div>
+      )}
+
       {/* Floating Action Bar */}
       {project.status === 'ready' && project.clips.length > 0 && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50">
@@ -539,7 +702,7 @@ export default function ProjectPage() {
                 {selectedClips.size} selected
               </span>
             )}
-            <button className="btn-secondary flex items-center gap-2 text-sm">
+            <button onClick={handleRenderBatch} className="btn-secondary flex items-center gap-2 text-sm">
               <Film className="w-4 h-4" />
               Render {selectedClips.size > 0 ? 'Selected' : 'All'}
             </button>
