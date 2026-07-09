@@ -91,7 +91,7 @@ async function transcribeWithWhisper(audioBuffer: Buffer): Promise<TranscriptSeg
   const Groq = (await import('groq-sdk')).default;
   const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
-  const file = new File([audioBuffer], 'audio.webm', { type: 'audio/webm' });
+  const file = new File([new Uint8Array(audioBuffer)], 'audio.webm', { type: 'audio/webm' });
 
   const response = await groq.audio.transcriptions.create({
     file,
