@@ -1,11 +1,6 @@
-import Groq from 'groq-sdk';
+import { chatCompletion, hasAnyAIKey } from './client';
 import type { Platform } from '@/types';
 import { PLATFORM_PRESETS } from '@/types';
-
-function getClient() {
-  if (!process.env.GROQ_API_KEY) return null;
-  return new Groq({ apiKey: process.env.GROQ_API_KEY });
-}
 
 interface ClipMetadata {
   title: string;
@@ -45,8 +40,7 @@ export async function generateClipMetadata(
   platform: Platform,
   brandName?: string
 ): Promise<ClipMetadata> {
-  const client = getClient();
-  if (!client) {
+  if (!hasAnyAIKey()) {
     return {
       title: '',
       hook: '',
@@ -64,8 +58,7 @@ export async function generateClipMetadata(
     ? `Brand: "${brandName}". Subtly reference the brand where natural -- don't force it.`
     : 'No specific brand to mention.';
 
-  const response = await client.chat.completions.create({
-    model: 'llama-3.3-70b-versatile',
+  const { text } = await chatCompletion({
     max_tokens: 1024,
     temperature: 0.4,
     messages: [
@@ -105,8 +98,6 @@ Return ONLY the JSON object.`,
       },
     ],
   });
-
-  const text = response.choices[0]?.message?.content ?? '';
 
   try {
     const parsed = JSON.parse(text);

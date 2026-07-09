@@ -31,6 +31,7 @@ import type { AppSettings, CaptionStyle, Platform, ClipLength } from '@/types';
 
 interface SettingsState extends AppSettings {
   groqApiKey?: string;
+  perplexityApiKey?: string;
   [key: string]: unknown;
 }
 
@@ -282,6 +283,24 @@ export default function SettingsPage() {
                 onTest={() => testConnection('groqApiKey')}
                 testing={testStates.groqApiKey?.testing}
                 testResult={testStates.groqApiKey?.result}
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">
+                Perplexity API Key <span className="text-[var(--text-tertiary)] font-normal">(fallback)</span>
+              </label>
+              <p className="text-xs text-[var(--text-tertiary)] mb-2">
+                Used as fallback if Groq is unavailable.
+                Get your key at <a href="https://www.perplexity.ai/settings/api" target="_blank" rel="noopener noreferrer" className="text-brand-500 hover:underline">perplexity.ai/settings/api</a>
+              </p>
+              <PasswordInput
+                value={settings.perplexityApiKey ?? ''}
+                onChange={(v) => update({ perplexityApiKey: v })}
+                placeholder="pplx-..."
+                onTest={() => testConnection('perplexityApiKey')}
+                testing={testStates.perplexityApiKey?.testing}
+                testResult={testStates.perplexityApiKey?.result}
               />
             </div>
 

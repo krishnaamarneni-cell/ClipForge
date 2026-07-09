@@ -1,4 +1,4 @@
-import Groq from 'groq-sdk';
+import { chatCompletion, hasAnyAIKey } from './client';
 import type { TranscriptSegment, Hook, EmotionalPeak, KeyMoment, TopicSegment } from '@/types';
 
 export interface AnalysisResult {
@@ -9,11 +9,6 @@ export interface AnalysisResult {
   keyMoments: KeyMoment[];
   speakerChanges: { timestamp: number; speaker: string }[];
   summary: string;
-}
-
-function getClient() {
-  if (!process.env.GROQ_API_KEY) return null;
-  return new Groq({ apiKey: process.env.GROQ_API_KEY });
 }
 
 function formatTranscriptForPrompt(transcript: TranscriptSegment[]): string {
@@ -36,15 +31,13 @@ export async function analyzeTranscript(
   transcript: TranscriptSegment[],
   duration: number
 ): Promise<AnalysisResult> {
-  const client = getClient();
-  if (!client) {
+  if (!hasAnyAIKey()) {
     return getMockAnalysis(transcript, duration);
   }
 
   const formatted = formatTranscriptForPrompt(transcript);
 
-  const response = await client.chat.completions.create({
-    model: 'llama-3.3-70b-versatile',
+  const { text } = await chatCompletion({
     max_tokens: 4096,
     temperature: 0.3,
     messages: [
@@ -117,8 +110,6 @@ Return ONLY the JSON object, no other text.`,
       },
     ],
   });
-
-  const text = response.choices[0]?.message?.content ?? '';
 
   try {
     const parsed = JSON.parse(text);

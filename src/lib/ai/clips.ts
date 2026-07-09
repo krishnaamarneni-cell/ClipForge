@@ -1,11 +1,6 @@
-import Groq from 'groq-sdk';
+import { chatCompletion, hasAnyAIKey } from './client';
 import type { TranscriptSegment, ClipSuggestion } from '@/types';
 import type { AnalysisResult } from './analyze';
-
-function getClient() {
-  if (!process.env.GROQ_API_KEY) return null;
-  return new Groq({ apiKey: process.env.GROQ_API_KEY });
-}
 
 export async function generateClipSuggestions(
   analysis: AnalysisResult,
@@ -13,8 +8,7 @@ export async function generateClipSuggestions(
   clipLengths: number[] = [30, 60, 120, 180],
   maxClipsPerLength: number = 3
 ): Promise<ClipSuggestion[]> {
-  const client = getClient();
-  if (!client) {
+  if (!hasAnyAIKey()) {
     return getMockClipSuggestions(analysis, transcript);
   }
 
@@ -26,8 +20,7 @@ export async function generateClipSuggestions(
     })
     .join('\n');
 
-  const response = await client.chat.completions.create({
-    model: 'llama-3.3-70b-versatile',
+  const { text } = await chatCompletion({
     max_tokens: 4096,
     temperature: 0.3,
     messages: [
@@ -97,8 +90,6 @@ Return ONLY the JSON array.`,
       },
     ],
   });
-
-  const text = response.choices[0]?.message?.content ?? '';
 
   try {
     const parsed = JSON.parse(text);
