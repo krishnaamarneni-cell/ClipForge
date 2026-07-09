@@ -84,22 +84,22 @@ export async function POST(
     });
 
     let transcript: TranscriptSegment[];
-    const hasWhisperKey = !!process.env.OPENAI_API_KEY;
+    const hasGroqKey = !!process.env.GROQ_API_KEY;
 
-    if (hasWhisperKey && project.filePath) {
-      // Real Whisper transcription
-      const { default: OpenAI } = await import('openai');
-      const openai = new OpenAI();
+    if (hasGroqKey && project.filePath) {
+      const Groq = (await import('groq-sdk')).default;
+      const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
       const fs = await import('fs');
 
-      const response = await openai.audio.transcriptions.create({
+      const response = await groq.audio.transcriptions.create({
         file: fs.createReadStream(project.filePath),
-        model: 'whisper-1',
+        model: 'whisper-large-v3',
         response_format: 'verbose_json',
         timestamp_granularities: ['segment'],
       });
 
-      transcript = (response.segments ?? []).map((seg: { start: number; end: number; text: string }) => ({
+      const segments = (response as unknown as { segments?: Array<{ start: number; end: number; text: string }> }).segments ?? [];
+      transcript = segments.map((seg) => ({
         start: seg.start,
         end: seg.end,
         text: seg.text.trim(),
