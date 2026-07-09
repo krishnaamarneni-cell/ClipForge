@@ -1,4 +1,5 @@
 import { chatCompletion, hasAnyAIKey } from './client';
+import { repairJSON } from './json-repair';
 import type { TranscriptSegment, Hook, EmotionalPeak, KeyMoment, TopicSegment } from '@/types';
 
 export interface AnalysisResult {
@@ -38,7 +39,7 @@ export async function analyzeTranscript(
   const formatted = formatTranscriptForPrompt(transcript);
 
   const { text } = await chatCompletion({
-    max_tokens: 4096,
+    max_tokens: 8192,
     temperature: 0.3,
     messages: [
       {
@@ -112,7 +113,7 @@ Return ONLY the JSON object, no other text.`,
   });
 
   try {
-    const parsed = JSON.parse(text);
+    const parsed = JSON.parse(repairJSON(text));
     return {
       mainTopic: parsed.mainTopic ?? '',
       topics: (parsed.topics ?? []).map((t: TopicSegment) => ({

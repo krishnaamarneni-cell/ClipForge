@@ -1,4 +1,5 @@
 import { chatCompletion, hasAnyAIKey } from './client';
+import { repairJSON } from './json-repair';
 import type { TranscriptSegment, ClipSuggestion } from '@/types';
 import type { AnalysisResult } from './analyze';
 
@@ -21,7 +22,7 @@ export async function generateClipSuggestions(
     .join('\n');
 
   const { text } = await chatCompletion({
-    max_tokens: 4096,
+    max_tokens: 8192,
     temperature: 0.3,
     messages: [
       {
@@ -92,7 +93,7 @@ Return ONLY the JSON array.`,
   });
 
   try {
-    const parsed = JSON.parse(text);
+    const parsed = JSON.parse(repairJSON(text));
 
     if (!Array.isArray(parsed)) {
       throw new Error('Response is not an array');
