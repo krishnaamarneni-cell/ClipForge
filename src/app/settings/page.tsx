@@ -30,8 +30,7 @@ import { toast } from '@/components/ui/toast';
 import type { AppSettings, CaptionStyle, Platform, ClipLength } from '@/types';
 
 interface SettingsState extends AppSettings {
-  anthropicApiKey?: string;
-  openaiApiKey?: string;
+  groqApiKey?: string;
   [key: string]: unknown;
 }
 
@@ -270,29 +269,19 @@ export default function SettingsPage() {
           <div className="flex flex-col gap-5">
             <div>
               <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">
-                Anthropic API Key
+                Groq API Key
               </label>
+              <p className="text-xs text-[var(--text-tertiary)] mb-2">
+                Powers AI analysis, clip generation, and Whisper transcription.
+                Get your key at <a href="https://console.groq.com/keys" target="_blank" rel="noopener noreferrer" className="text-brand-500 hover:underline">console.groq.com</a>
+              </p>
               <PasswordInput
-                value={settings.anthropicApiKey ?? ''}
-                onChange={(v) => update({ anthropicApiKey: v })}
-                placeholder="sk-ant-..."
-                onTest={() => testConnection('anthropicApiKey')}
-                testing={testStates.anthropicApiKey?.testing}
-                testResult={testStates.anthropicApiKey?.result}
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">
-                OpenAI API Key (Whisper)
-              </label>
-              <PasswordInput
-                value={settings.openaiApiKey ?? ''}
-                onChange={(v) => update({ openaiApiKey: v })}
-                placeholder="sk-..."
-                onTest={() => testConnection('openaiApiKey')}
-                testing={testStates.openaiApiKey?.testing}
-                testResult={testStates.openaiApiKey?.result}
+                value={settings.groqApiKey ?? ''}
+                onChange={(v) => update({ groqApiKey: v })}
+                placeholder="gsk_..."
+                onTest={() => testConnection('groqApiKey')}
+                testing={testStates.groqApiKey?.testing}
+                testResult={testStates.groqApiKey?.result}
               />
             </div>
 

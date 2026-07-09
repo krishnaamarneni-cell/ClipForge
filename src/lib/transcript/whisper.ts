@@ -1,35 +1,26 @@
 import fs from 'fs';
+import Groq from 'groq-sdk';
 import type { TranscriptSegment } from '@/types';
 
 export async function transcribeAudio(audioPath: string): Promise<TranscriptSegment[]> {
-  const apiKey = process.env.OPENAI_API_KEY;
+  const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) {
-    console.log('No OpenAI API key configured, using mock transcript');
+    console.log('No Groq API key configured, using mock transcript');
     return getMockTranscript();
   }
 
-  const formData = new FormData();
-  const audioBuffer = fs.readFileSync(audioPath);
-  const audioBlob = new Blob([audioBuffer], { type: 'audio/wav' });
-  formData.append('file', audioBlob, 'audio.wav');
-  formData.append('model', 'whisper-1');
-  formData.append('response_format', 'verbose_json');
-  formData.append('timestamp_granularities[]', 'segment');
+  const client = new Groq({ apiKey });
 
-  const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${apiKey}` },
-    body: formData,
+  const transcription = await client.audio.transcriptions.create({
+    file: fs.createReadStream(audioPath),
+    model: 'whisper-large-v3',
+    response_format: 'verbose_json',
+    timestamp_granularities: ['segment'],
   });
 
-  if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`Whisper API error: ${error}`);
-  }
+  const segments = (transcription as unknown as { segments?: Array<{ start: number; end: number; text: string }> }).segments ?? [];
 
-  const result = await response.json();
-
-  return (result.segments || []).map((seg: { start: number; end: number; text: string }) => ({
+  return segments.map((seg) => ({
     start: seg.start,
     end: seg.end,
     text: seg.text.trim(),

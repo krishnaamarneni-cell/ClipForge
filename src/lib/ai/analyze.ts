@@ -1,4 +1,4 @@
-import Anthropic from '@anthropic-ai/sdk';
+import Groq from 'groq-sdk';
 import type { TranscriptSegment, Hook, EmotionalPeak, KeyMoment, TopicSegment } from '@/types';
 
 export interface AnalysisResult {
@@ -12,8 +12,8 @@ export interface AnalysisResult {
 }
 
 function getClient() {
-  if (!process.env.ANTHROPIC_API_KEY) return null;
-  return new Anthropic();
+  if (!process.env.GROQ_API_KEY) return null;
+  return new Groq({ apiKey: process.env.GROQ_API_KEY });
 }
 
 function formatTranscriptForPrompt(transcript: TranscriptSegment[]): string {
@@ -43,13 +43,18 @@ export async function analyzeTranscript(
 
   const formatted = formatTranscriptForPrompt(transcript);
 
-  const response = await client.messages.create({
-    model: 'claude-sonnet-4-20250514',
+  const response = await client.chat.completions.create({
+    model: 'llama-3.3-70b-versatile',
     max_tokens: 4096,
+    temperature: 0.3,
     messages: [
       {
+        role: 'system',
+        content: 'You are an expert content strategist who specializes in short-form video. You always respond with valid JSON only, no other text.',
+      },
+      {
         role: 'user',
-        content: `You are an expert content strategist who specializes in short-form video. Analyze this transcript from a ${formatTimestamp(duration)} video and identify every element that could make a compelling clip.
+        content: `Analyze this transcript from a ${formatTimestamp(duration)} video and identify every element that could make a compelling clip.
 
 TRANSCRIPT:
 ${formatted}
@@ -113,8 +118,7 @@ Return ONLY the JSON object, no other text.`,
     ],
   });
 
-  const text =
-    response.content[0].type === 'text' ? response.content[0].text : '';
+  const text = response.choices[0]?.message?.content ?? '';
 
   try {
     const parsed = JSON.parse(text);

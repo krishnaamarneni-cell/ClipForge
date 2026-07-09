@@ -1,10 +1,10 @@
-import Anthropic from '@anthropic-ai/sdk';
+import Groq from 'groq-sdk';
 import type { TranscriptSegment, ClipSuggestion } from '@/types';
 import type { AnalysisResult } from './analyze';
 
 function getClient() {
-  if (!process.env.ANTHROPIC_API_KEY) return null;
-  return new Anthropic();
+  if (!process.env.GROQ_API_KEY) return null;
+  return new Groq({ apiKey: process.env.GROQ_API_KEY });
 }
 
 export async function generateClipSuggestions(
@@ -26,13 +26,18 @@ export async function generateClipSuggestions(
     })
     .join('\n');
 
-  const response = await client.messages.create({
-    model: 'claude-sonnet-4-20250514',
+  const response = await client.chat.completions.create({
+    model: 'llama-3.3-70b-versatile',
     max_tokens: 4096,
+    temperature: 0.3,
     messages: [
       {
+        role: 'system',
+        content: 'You are a viral short-form video editor. You always respond with valid JSON only, no other text.',
+      },
+      {
         role: 'user',
-        content: `You are a viral short-form video editor. Given a content analysis and transcript, identify the best segments to cut into clips.
+        content: `Given a content analysis and transcript, identify the best segments to cut into clips.
 
 CONTENT ANALYSIS:
 Main topic: ${analysis.mainTopic}
@@ -93,8 +98,7 @@ Return ONLY the JSON array.`,
     ],
   });
 
-  const text =
-    response.content[0].type === 'text' ? response.content[0].text : '';
+  const text = response.choices[0]?.message?.content ?? '';
 
   try {
     const parsed = JSON.parse(text);

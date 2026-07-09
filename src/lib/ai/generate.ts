@@ -1,8 +1,11 @@
-import Anthropic from '@anthropic-ai/sdk';
+import Groq from 'groq-sdk';
 import type { Platform } from '@/types';
 import { PLATFORM_PRESETS } from '@/types';
 
-const client = new Anthropic();
+function getClient() {
+  if (!process.env.GROQ_API_KEY) return null;
+  return new Groq({ apiKey: process.env.GROQ_API_KEY });
+}
 
 interface ClipMetadata {
   title: string;
@@ -42,6 +45,17 @@ export async function generateClipMetadata(
   platform: Platform,
   brandName?: string
 ): Promise<ClipMetadata> {
+  const client = getClient();
+  if (!client) {
+    return {
+      title: '',
+      hook: '',
+      description: '',
+      hashtags: [],
+      thumbnailSuggestion: '',
+    };
+  }
+
   const preset = PLATFORM_PRESETS[platform];
   const toneGuide = TONE_GUIDES[preset.titleTone] ?? TONE_GUIDES.casual;
   const platformContext = PLATFORM_CONTEXT[platform];
@@ -50,15 +64,18 @@ export async function generateClipMetadata(
     ? `Brand: "${brandName}". Subtly reference the brand where natural -- don't force it.`
     : 'No specific brand to mention.';
 
-  const response = await client.messages.create({
-    model: 'claude-sonnet-4-20250514',
+  const response = await client.chat.completions.create({
+    model: 'llama-3.3-70b-versatile',
     max_tokens: 1024,
+    temperature: 0.4,
     messages: [
       {
+        role: 'system',
+        content: 'You are a social media copywriter who creates scroll-stopping metadata for short-form video clips. You always respond with valid JSON only, no other text.',
+      },
+      {
         role: 'user',
-        content: `You are a social media copywriter who creates scroll-stopping metadata for short-form video clips.
-
-CLIP TRANSCRIPT:
+        content: `CLIP TRANSCRIPT:
 ${clipText}
 
 TOPIC: ${topicCategory}
@@ -89,8 +106,7 @@ Return ONLY the JSON object.`,
     ],
   });
 
-  const text =
-    response.content[0].type === 'text' ? response.content[0].text : '';
+  const text = response.choices[0]?.message?.content ?? '';
 
   try {
     const parsed = JSON.parse(text);
