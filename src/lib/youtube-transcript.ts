@@ -42,7 +42,7 @@ export async function fetchYouTubeTranscript(videoId: string): Promise<Transcrip
 }
 
 async function downloadYouTubeAudio(videoId: string): Promise<Buffer> {
-  const ytdl = (await import('ytdl-core')).default;
+  const ytdl = (await import('@distube/ytdl-core')).default;
   const url = `https://www.youtube.com/watch?v=${videoId}`;
 
   if (!ytdl.validateURL(url)) {
